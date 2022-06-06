@@ -1,7 +1,10 @@
-import React from 'react'
+import React, { useRef, useState, } from 'react'
 
 import { useDrag, useDragLayer, useDrop } from "react-dnd"
 import { getEmptyImage } from 'react-dnd-html5-backend'
+
+import Xarrow from "react-xarrows";
+
 
 function NewBlock({ blockProps }) {
 
@@ -34,7 +37,80 @@ function NewBlock({ blockProps }) {
     )
 }
 
-function BoardBlock({ blockProps, board, setBoard }) {
+
+const ConnectPointsWrapper = ({ blockProps, handler, }) => {
+
+    const boxId = blockProps.id;
+
+    const connectPointStyle = {
+        position: "absolute",
+        width: 15,
+        height: 15,
+        borderRadius: "50%",
+        background: "black"
+    };
+    const connectPointOffset = {
+        left: { left: 0, top: "50%", transform: "translate(-50%, -50%)" },
+        right: { left: "100%", top: "50%", transform: "translate(-50%, -50%)" },
+        top: { left: "50%", top: 0, transform: "translate(-50%, -50%)" },
+        bottom: { left: "50%", top: "100%", transform: "translate(-50%, -50%)" }
+    };
+
+    // const [position, setPosition] = useState({});
+    // const [beingDragged, setBeingDragged] = useState(false);
+
+    // Drag event handler 
+    const [{ isDragging }, drag, preview] = useDrag(() => ({
+        type: "connector",
+        item: blockProps,
+        collect: (monitor) => ({
+            isDragging: monitor.isDragging(),
+        })
+    }))
+
+    const ref1 = useRef()
+
+    return (
+        <React.Fragment>
+            <div
+                ref={drag}
+                className="connectPoint"
+                style={{
+                    ...connectPointStyle,
+                    ...connectPointOffset[handler],
+                    // ...position
+                }}
+                draggable
+                onMouseDown={e => e.stopPropagation()}
+                onDragStart={e => {
+                    console.log("Dragging connector", handler, boxId)
+                    // setBeingDragged(true);
+                    e.dataTransfer.setData("arrow", boxId);
+
+                }}
+                // onDrag={e => {
+                //     setPosition({
+                //         position: "fixed",
+                //         left: e.clientX,
+                //         top: e.clientY,
+                //         transform: "none",
+                //         opacity: 0
+                //     });
+                //     console.log("onDrag")
+                // }}
+                onDragEnd={e => {
+                    console.log("onDragEnd")
+                    // setPosition({});
+                    // setBeingDragged(false);
+                }}
+            />
+            {/* {isDragging ? <Xarrow start={boxId} end={ref1} /> : null} */}
+        </React.Fragment>
+    );
+};
+
+
+function BoardBlock({ blockProps, board, setBoard, addArrow, setArrows }) {
 
     // Drag event handler 
     const [{ isDragging }, drag, preview] = useDrag(() => ({
@@ -50,7 +126,7 @@ function BoardBlock({ blockProps, board, setBoard }) {
         preview(getEmptyImage(), { captureDraggingState: true })
     }, [])
 
-    // Track coordinates
+    // Track dragged coordinates
     const { itemType, item, sourceClientOffset } =
         useDragLayer((monitor) => ({
             item: monitor.getItem(),
@@ -58,44 +134,77 @@ function BoardBlock({ blockProps, board, setBoard }) {
             sourceClientOffset: monitor.getSourceClientOffset(),
         }))
 
+    // Edit block coordinates based on drag
     React.useEffect(() => {
-        if (sourceClientOffset && isDragging) {
+        if (isDragging) {
             const { x, y } = sourceClientOffset;
             const draggedBlock = (board.filter((block, index) => (block.id === blockProps.id)))[0];
-            console.log(draggedBlock.id)
             const draggedBlockIndex = board.indexOf(draggedBlock)
             board[draggedBlockIndex]["x"] = x;
             board[draggedBlockIndex]["y"] = y;
             setBoard([...board])
         }
-    }, [sourceClientOffset, isDragging])
+    }, [sourceClientOffset, isDragging]);
+
+    // Drop event handler 
+    const [{ isOver }, drop] = useDrop(() => ({
+        accept: "connector",
+        drop: (item, monitor) => {
+            console.log(item)
+        },
+        collect: (monitor) => ({
+            isOver: !!monitor.isOver(),
+        }),
+    }));
+
 
     return (
-        <div
-            ref={drag}
-            style={{
-                borderColor: isDragging ? blockProps.draggingBorderColor : blockProps.staticBorderColor,
-                borderWidth: 1, borderStyle: "solid",
+        <>
+            <div
+                ref={drop}
+            >
 
-                padding: 10,
-                width: 50, height: 50,
+                <div
+                    id={blockProps.id}
+                    ref={drag}
+                    style={{
+                        borderColor: isDragging ? blockProps.draggingBorderColor : blockProps.staticBorderColor,
+                        borderWidth: 1, borderStyle: "solid",
 
-                position: 'fixed',
-                top: blockProps.y,
-                left: blockProps.x
+                        padding: 10,
+                        width: 50, height: 50,
 
-            }}
-        >
-            <text>
-                {blockProps.id}
-            </text>
-            <p>
-                {blockProps.x}, {blockProps.y}
-            </p>
-            <p>
+                        position: 'fixed',
+                        top: blockProps.y,
+                        left: blockProps.x
 
-            </p>
-        </div>
+                    }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => {
+                        console.log("DROP")
+                        if (e.dataTransfer.getData("arrow") === blockProps.id) {
+                            console.log(e.dataTransfer.getData("arrow"), blockProps.id);
+                        } else {
+                            const refs = { start: e.dataTransfer.getData("arrow"), end: blockProps.id };
+                            addArrow(refs);
+                            console.log("refs", refs);
+                        }
+                    }}
+
+                >
+
+                    {blockProps.id}
+
+
+                    <div>
+                        {blockProps.x}, {blockProps.y}
+                    </div>
+
+
+                    <ConnectPointsWrapper key={blockProps.id} blockProps={blockProps} handler={"right"} />
+                </div>
+            </div>
+        </>
     )
 }
 
@@ -142,27 +251,25 @@ function DnD() {
 
 
     // Drop event handler 
-    const [{ isOver, coordinates }, drop] = useDrop(() => ({
+    const [{ isOver }, drop] = useDrop(() => ({
         accept: "new-block",
         drop: (item, monitor) => {
-            const delta = monitor.getDifferenceFromInitialOffset()
-            const clientOffset = monitor.getClientOffset();
-            const initialSourceOffset = monitor.getInitialSourceClientOffset(); 
-            const dropResult = monitor.getDropResult()
             const sourceClientOffset = monitor.getSourceClientOffset()
-            // console.log("DELTA", delta)
-            // console.log("CLIENT OFFSET", clientOffset)
-            // console.log("INITIAL SOURCE OFFSET", initialSourceOffset)
-            // console.log("DROP RESULT", dropResult)
-            // console.log("SOURCE CLIENT OFFSET",sourceClientOffset)
             let left = Math.round(sourceClientOffset.x)
             let top = Math.round(sourceClientOffset.y)
-            addBlockToBoard(item, {x: left, y: top})
+            addBlockToBoard(item, { x: left, y: top })
         },
         collect: (monitor) => ({
             isOver: !!monitor.isOver(),
         }),
     }));
+
+
+
+    const [arrows, setArrows] = useState([]);
+    const addArrow = ({ start, end }) => {
+        setArrows([...arrows, { start, end }]);
+    };
 
 
     return (
@@ -214,11 +321,22 @@ function DnD() {
                 >
                     {board.map((blockProps, index) => {
                         return <BoardBlock
-                            key={`b-${index}`}
+                            key={`b-${index}-${blockProps.id}`}
                             board={board}
                             setBoard={setBoard}
-                            blockProps={blockProps} />;
+                            blockProps={blockProps}
+                            addArrow={addArrow}
+                            setArrows={setArrows}
+                        />;
                     })}
+
+                    {arrows.map(ar => (
+                        <Xarrow
+                            start={ar.start}
+                            end={ar.end}
+                            key={ar.start + "-." + ar.start}
+                        />
+                    ))}
                 </div>
 
 
