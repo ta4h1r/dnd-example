@@ -330,11 +330,11 @@ function DnD() {
                         />;
                     })}
 
-                    {arrows.map(ar => (
+                    {arrows.map((ar, index) => (
                         <Xarrow
                             start={ar.start}
                             end={ar.end}
-                            key={ar.start + "-." + ar.start}
+                            key={ar.start + "-" + ar.end + "-" + index}
                         />
                     ))}
                 </div>
